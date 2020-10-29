@@ -1,0 +1,42 @@
+version: '3'
+services:
+  minio:
+    image: minio:latest
+    build:
+      context: .
+    volumes:
+      - data1:/data
+    expose:
+      - "9000"
+    env_file:
+      - minio.env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  createbuckets:
+    image: minio/mc
+    depends_on:
+      - minio
+    env_file:
+      - minio.env
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc config host add myminio http://minio:9000 ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY};
+      /usr/bin/mc admin user add myminio ${COWRIE_UPLOAD_ACCESS} ${COWRIE_UPLOAD_SECRET};
+      /usr/bin/mc admin policy set myminio writeonly user=${COWRIE_UPLOAD_ACCESS};
+      exit 0;
+      "
+  nginx:
+    image: nginx:1.19.2-alpine
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "8000:9000"
+    depends_on:
+      - minio
+
+volumes:
+  data1:
